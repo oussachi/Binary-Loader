@@ -66,3 +66,72 @@ static bfd* open_bfd(std::string &fname) {
 
     return bfd_h;
 }
+
+static int load_binary_bfd(std::string &fname, Binary *bin, Binary::BinaryType type) {
+    int ret;
+    bfd *bfd_h;
+    const bfd_arch_info_type *bfd_info;
+
+    bfd_h = NULL;
+    /*Binary is opened using the previously defined open_bfd function*/
+    bfd_h = open_bfd(fname);
+    if(!bfd_h) {
+        goto fail;
+    }
+
+    /*Some of the binary's properties are set*/
+    bin->filename = std::string(fname);
+    bin->entry = bfd_get_start_address(bfd_h);
+    bin->type_str = std::string(bfd_h->xvec->name);
+
+    /*The xvec field gives us access to the bfd_target strcuture which includes
+    data about the type of the binary*/
+    switch(bfd_h->xvec->flavour){
+        case bfd_target_elf_flavour:
+            bin->type = Binary::BIN_TYPE_ELF;
+            break;
+        case bfd_target_coff_flavour:
+            bin->type = Binary::BIN_TYPE_PE;
+            break;
+        case bfd_target_unknown_flavour:
+        default:
+            fprintf(stderr, "unsupported binary type (%s)\n", bfd_h->xvec->name);
+            goto fail;
+    }
+
+    bfd_info = bfd_get_arch_info(bfd_h);
+    bin->arch_str = std::string(bfd_info->printable_name);
+
+    /*We here use the structure returned by bfd_get_arch_info to get data about
+    the architecture and then decide the binary's arch*/
+    switch(bfd_info->mach):
+        case bfd_mach_i386_i386:
+            bin->arch = Binary::ARCH_X86;
+            bin->bits = 32;
+            break;
+        case fd_mach_x86_64:
+            bin->arch = Binary::ARCH_X86;
+            bin->bits = 64;
+            break;
+        default:
+            fprintf(stderr, "unsupported architecture (%s)\n",
+                bfd_info->printable_name); 
+            goto fail;
+
+    /* Symbol handling is best effort only as they may not be present*/
+    load_symbols_bfd(bfd_h, bin);
+    load_dynsym_bfd(bfd_h, bin);
+
+    if(load_sections_bfd(bfd-h, bin) < 0) goto fail;
+
+    ret = 0;
+    goto cleanup;
+
+    fail:
+        ret = -1;
+
+    cleanup:
+        if(bfd_h) bfd_close(bfd_h);
+
+    return ret;
+}
