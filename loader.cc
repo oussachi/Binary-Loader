@@ -1,21 +1,9 @@
+/*This is a workaround the error of "config.h" must be included*/
+#define PACKAGE 1
+#define PACKAGE_VERSION 1
+
 #include <bfd.h>
 #include "loader.h"
-
-int load_binary(std::string &fname, Binary *bin, Binary::BinaryType type) {
-    return load_binary_bfd(fname, bin, type);
-}
-
-void unload_binary(Binary *bin) {
-    size_t i;
-    Section *sec;
-
-    for(i = 0; i < bin->sections.size(); i++) {
-        sec = &bin->sections[i];
-        if(sec->bytes) {
-            free(sec->bytes);
-        }
-    }
-}
 
 // Used to open a binary
 static bfd* open_bfd(std::string &fname) {
@@ -58,7 +46,7 @@ static bfd* open_bfd(std::string &fname) {
 
     /*The flavour in this function is simply the type of the binary -ELF,PE...-
     if the flavour is unknown it exists with an error message*/
-    if(bfd_get_flavor(bfd_h) == bfd_target_unknown_flavour) {
+    if(bfd_get_flavour(bfd_h) == bfd_target_unknown_flavour) {
         fprintf(stderr, "unrecognized format for binary '%s' (%s)\n",
         fname.c_str(), bfd_errmsg(bfd_get_error()));
         return NULL;
@@ -98,7 +86,7 @@ static int load_symbols_bfd(bfd *bfd_h, Binary *bin) {
         nsyms = bfd_canonicalize_symtab(bfd_h, bfd_symtab);
         if(nsyms < 0) {
             fprintf(stderr, "failed to read symtab (%s)\n",
-            bfd_errmsg(bfd)bfd_get_error());
+            bfd_errmsg(bfd_get_error()));
             goto fail;
         }
         /*Using the populated array bfd_symtab, we now create Symbol entries in our binary
@@ -157,7 +145,7 @@ static int load_dynsym_bfd(bfd *bfd_h, Binary *bin) {
         nsyms = bfd_canonicalize_dynamic_symtab(bfd_h, bfd_dynsym);
         if(nsyms < 0) {
             fprintf(stderr, "failed to read dynamic symtab (%s)\n",
-            bfd_errmsg(bfd)bfd_get_error());
+            bfd_errmsg(bfd_get_error()));
             goto fail;
         }
         /*Using the populated array bfd_dynsym, we now create Symbol entries in our binary
@@ -198,8 +186,9 @@ static int load_sections_bfd(bfd *bfd_h, Binary *bin) {
 
     /*We iterate over all sections in the asection linked list starting with the first one
     stored in bfd_h->sections*/
+    /*bfd_get_section_flags() has been deleted and thus is replaced with bfd_section_flags()*/
     for(bfd_sec = bfd_h->sections; bfd_sec; bfd_sec = bfd_sec->next) {
-        bfd_flags = bfd_get_section_flags(bfd_h, bfd_sec); /*get all section flags*/
+        bfd_flags = bfd_section_flags(bfd_sec); /*get all section flags*/
 
         /*get section type*/
         sectype = Section::SEC_TYPE_NONE;
@@ -213,9 +202,10 @@ static int load_sections_bfd(bfd *bfd_h, Binary *bin) {
 
         /*Get data of the section using libbfd functions and copy them into the Binary object's elements
         in the sections vector*/
-        vma = bfd_section_vma(bfd_h, bfd_sec);
-        size = bfd_section_size(bfd_h, bfd_sec);
-        secname = bfd_section_name(bfd_h, bfd_sec);
+        /*Signature for these functions changed compared to the book's*/
+        vma = bfd_section_vma(bfd_sec);
+        size = bfd_section_size(bfd_sec);
+        secname = bfd_section_name(bfd_sec);
         if(!secname) secname = "<unnamed>";
 
         bin->sections.push_back(Section());
@@ -280,12 +270,12 @@ static int load_binary_bfd(std::string &fname, Binary *bin, Binary::BinaryType t
 
     /*We here use the structure returned by bfd_get_arch_info to get data about
     the architecture and then decide the binary's arch*/
-    switch(bfd_info->mach):
+    switch(bfd_info->mach){
         case bfd_mach_i386_i386:
             bin->arch = Binary::ARCH_X86;
             bin->bits = 32;
             break;
-        case fd_mach_x86_64:
+        case bfd_mach_x86_64:
             bin->arch = Binary::ARCH_X86;
             bin->bits = 64;
             break;
@@ -293,12 +283,12 @@ static int load_binary_bfd(std::string &fname, Binary *bin, Binary::BinaryType t
             fprintf(stderr, "unsupported architecture (%s)\n",
                 bfd_info->printable_name); 
             goto fail;
-
+    }
     /* Symbol handling is best effort only as they may not be present*/
     load_symbols_bfd(bfd_h, bin);
     load_dynsym_bfd(bfd_h, bin);
 
-    if(load_sections_bfd(bfd-h, bin) < 0) goto fail;
+    if(load_sections_bfd(bfd_h, bin) < 0) goto fail;
 
     ret = 0;
     goto cleanup;
@@ -310,4 +300,20 @@ static int load_binary_bfd(std::string &fname, Binary *bin, Binary::BinaryType t
         if(bfd_h) bfd_close(bfd_h);
 
     return ret;
+}
+
+int load_binary(std::string &fname, Binary *bin, Binary::BinaryType type) {
+    return load_binary_bfd(fname, bin, type);
+}
+
+void unload_binary(Binary *bin) {
+    size_t i;
+    Section *sec;
+
+    for(i = 0; i < bin->sections.size(); i++) {
+        sec = &bin->sections[i];
+        if(sec->bytes) {
+            free(sec->bytes);
+        }
+    }
 }
