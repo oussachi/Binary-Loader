@@ -186,6 +186,63 @@ static int load_dynsym_bfd(bfd *bfd_h, Binary *bin) {
 }
 
 
+/*Function used to load sections, sections are represented by the struct asection and are
+included in a linked list*/
+static int load_sections_bfd(bfd *bfd_h, Binary *bin) {
+    int bfd_flags;
+    uint64_t vma, size;
+    const char *secname;
+    asection* bfd_sec;
+    Section *sec;
+    Section::SectionType sectype;
+
+    /*We iterate over all sections in the asection linked list starting with the first one
+    stored in bfd_h->sections*/
+    for(bfd_sec = bfd_h->sections; bfd_sec; bfd_sec = bfd_sec->next) {
+        bfd_flags = bfd_get_section_flags(bfd_h, bfd_sec); /*get all section flags*/
+
+        /*get section type*/
+        sectype = Section::SEC_TYPE_NONE;
+        if(bfd_flags & SEC_CODE) {
+            sectype = Section::SEC_TYPE_CODE;
+        } else if(bfd_flags & SEC_DATA) {
+            sectype = Section::SEC_TYPE_DATA;
+        } else {
+            continue;
+        }
+
+        /*Get data of the section using libbfd functions and copy them into the Binary object's elements
+        in the sections vector*/
+        vma = bfd_section_vma(bfd_h, bfd_sec);
+        size = bfd_section_size(bfd_h, bfd_sec);
+        secname = bfd_section_name(bfd_h, bfd_sec);
+        if(!secname) secname = "<unnamed>";
+
+        bin->sections.push_back(Section());
+        sec = &bin->sections.back();
+        sec->binary = bin;
+        sec->name = std::string(secname);
+        sec->type = sectype;
+        sec->vma = vma;
+        sec->size = size;
+        
+        
+        sec->bytes = (uint8_t*)malloc(size); /*Allocate enough space to copy the section's content into the Binary object*/
+        if(!sec->bytes) {
+            fprintf(stderr, "out of memory\n");
+            return -1;
+        }
+        /*copy the contents of the section into the Binary's section*/
+        if(!bfd_get_section_contents(bfd_h, bfd_sec, sec->bytes, 0, size)) {
+            fprintf(stderr, "failed to read section '%s' (%s)\n",
+            secname, bfd_errmsg(bfd_get_error()));
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 static int load_binary_bfd(std::string &fname, Binary *bin, Binary::BinaryType type) {
     int ret;
     bfd *bfd_h;
