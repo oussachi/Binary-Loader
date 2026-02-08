@@ -21,7 +21,7 @@ class Symbol {
 
     SymbolType type;
     std::string name;
-    uint64_t addr;
+    uint64_t addr; /*start address*/
 };
 
 class Section {
@@ -41,7 +41,7 @@ class Section {
     Binary *binary;
     std::string name;
     SectionType type;
-    uint64_t vma;
+    uint64_t vma; /*start address*/
     uint64_t size;
     uint8_t *bytes;
 };
